@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Naruto vs Sasuke: Final Showdown (Remastered)</title>
+    <link rel="icon" type="image/svg+xml" href="assets/logo.jpg">	
+    <meta name="description" content="Naruto VS Sasuke Lite 🗿">
+    
+    <!-- React Core -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --c-naruto: #ff9900;
+            --c-sasuke: #8a2be2;
+            --c-chakra: #00d2ff;
+        }
+        body {
+            background-color: #050505;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            font-family: 'Orbitron', sans-serif;
+            color: white;
+        }
+        
+        /* Typography */
+        .font-comic { font-family: 'Bangers', cursive; letter-spacing: 2px; }
+        
+        /* Effects */
+        .scanlines {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        .hit-stop { filter: contrast(200%) brightness(150%) grayscale(50%); }
+
+        @keyframes shake-anim {
+            0% { transform: translate(0, 0) rotate(0); }
+            20% { transform: translate(-8px, 6px) rotate(-1deg); }
+            40% { transform: translate(8px, -6px) rotate(1deg); }
+            60% { transform: translate(-6px, 4px) rotate(0); }
+            80% { transform: translate(6px, -4px) rotate(-1deg); }
+            100% { transform: translate(0, 0) rotate(0); }
+        }
+        .shake { animation: shake-anim 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+
+        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 10px currentColor; } 50% { box-shadow: 0 0 25px currentColor; } }
+        .glow-pulse { animation: pulse-glow 1.5s infinite; }
+
+        @keyframes damage-float {
+            0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+            20% { opacity: 1; transform: translateY(0) scale(1.5); }
+            100% { opacity: 0; transform: translateY(-60px) scale(1); }
+        }
+        .dmg-text { animation: damage-float 0.8s ease-out forwards; }
+
+        /* UI Elements */
+        .clip-button { clip-path: polygon(10% 0, 100% 0, 100% 80%, 90% 100%, 0 100%, 0 20%); }
+        .bar-skew-l { transform: skewX(-30deg); transform-origin: top left; }
+        .bar-skew-r { transform: skewX(30deg); transform-origin: top right; }
+        
+        .glass-panel {
+            background: rgba(16, 16, 20, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Portrait Warning */
+        #landscape-blocker { display: none; }
+        @media (orientation: portrait) {
+            #landscape-blocker { display: flex !important; }
+            #root { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ROTATION WARNING -->
+    <div id="landscape-blocker" class="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center p-8 text-center">
+        <i class="fas fa-sync-alt fa-spin text-5xl text-orange-500 mb-4"></i>
+        <h1 class="text-3xl font-comic text-white mb-2">ROTATE DEVICE!</h1>
+        <p class="text-gray-400 font-mono">Game ini wajib Landscape mode, Bosku.</p>
+    </div>
+
+    <div id="root" class="w-full h-full"></div>
+
+    <script type="text/babel">
+        // --- ASSETS ---
+        const ASSETS = {
+            loading: "assets/loading.gif",
+            stages: {
+                "valley": { name: "Shuriken Training", img: "assets/shurikentraining.jpeg" },
+                "forest": { name: "B N A", img: "assets/bna.jpeg" },
+                "ruins": { name: "Ancient Ruins", img: "assets/airterjun.jpeg" }
+            },
+            naruto: {
+                avatar: "assets/karakter1-naruto.gif",
+                idle: "assets/naruto-lari.gif", 
+                atk1: "assets/nyerang1-naruto.gif",
+                atk2: "assets/nyerang2-naruto.gif", // Ulti
+                win: "assets/karakter1-naruto.gif"
+            },
+            sasuke: {
+                avatar: "assets/karakter2-sasuke.gif",
+                idle: "assets/sasuke-biasa.png",
+                walk: "assets/sasuke-jalan.png",
+                atk1: "assets/nyerang1-sasuke.gif",
+                atk2: "assets/nyerang2-sasuke.gif" // Ulti
+            }
+        };
+
+        // --- AUDIO ENGINE (TONE.JS) ---
+        const Audio = {
+            init: async () => { await Tone.start(); },
+            play: (type) => {
+                if (!window.audioEnabled) return;
+                try {
+                    const poly = new Tone.PolySynth(Tone.Synth).toDestination();
+                    const mem = new Tone.MembraneSynth().toDestination();
+                    const metal = new Tone.MetalSynth().toDestination();
+                    const noise = new Tone.NoiseSynth().toDestination();
+
+                    switch(type) {
+                        case 'hover': poly.triggerAttackRelease(["C5"], "64n", undefined, 0.05); break;
+                        case 'select': poly.triggerAttackRelease(["E5", "G5"], "32n"); break;
+                        case 'hit': 
+                            mem.triggerAttackRelease("C2", "16n"); 
+                            noise.triggerAttackRelease("32n");
+                            break;
+                        case 'ult': 
+                            metal.triggerAttackRelease("G2", "2n");
+                            mem.triggerAttackRelease("C1", "1n");
+                            break;
+                        case 'win': poly.triggerAttackRelease(["C4", "E4", "G4", "C5"], "4n"); break;
+                    }
+                } catch(e) {}
+            }
+        };
+
+        // --- MAIN APP (STATE MANAGER) ---
+        const App = () => {
+            const [view, setView] = React.useState('loading'); // loading, menu, battle, result
+            const [settings, setSettings] = React.useState({ 
+                diff: 'normal', 
+                stage: 'valley', 
+                audio: true 
+            });
+            const [winner, setWinner] = React.useState(null); // Fix: Winner state lifted up
+
+            React.useEffect(() => {
+                window.audioEnabled = settings.audio;
+                setTimeout(() => setView('menu'), 2500);
+            }, [settings.audio]);
+
+            // Handlers
+            const startGame = () => setView('battle');
+            
+            const handleBattleFinish = (winnerName) => {
+                setWinner(winnerName);
+                setTimeout(() => setView('result'), 1500); // Delay biar dramatis
+            };
+
+            const handleRestart = () => {
+                setWinner(null);
+                setView('menu');
+            };
+
+            return (
+                <div className="relative w-full h-screen bg-black overflow-hidden select-none">
+                    {/* Global Background */}
+                    <div className="absolute inset-0 z-0">
+                        <img src={ASSETS.stages[settings.stage].img} className="w-full h-full object-cover opacity-40 blur-sm scale-110" />
+                        <div className="absolute inset-0 bg-black/40 scanlines z-10"></div>
+                    </div>
+
+                    {/* Views Router */}
+                    {view === 'loading' && <LoadingScreen />}
+                    {view === 'menu' && <MainMenu settings={settings} setSettings={setSettings} onStart={startGame} />}
+                    {view === 'battle' && <BattleArena settings={settings} onFinish={handleBattleFinish} />}
+                    {view === 'result' && <ResultScreen winner={winner} onRestart={handleRestart} />}
+                </div>
+            );
+        };
+
+        // --- COMPONENTS ---
+
+        const LoadingScreen = () => (
+            <div className="flex flex-col items-center justify-center h-full relative z-50 bg-black">
+                <img src={ASSETS.loading} className="w-32 mb-4" />
+                <div className="w-64 h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-orange-500 animate-[width_2s_ease-out] w-full"></div>
+                </div>
+                <p className="mt-4 text-orange-500 font-comic tracking-widest animate-pulse">LOADING ASSETS...</p>
+            </div>
+        );
+
+        const MainMenu = ({ settings, setSettings, onStart }) => {
+            const difficulties = ['easy', 'normal', 'hard', 'god'];
+            const stages = Object.keys(ASSETS.stages);
+
+            const toggleDiff = () => {
+                Audio.play('select');
+                const idx = difficulties.indexOf(settings.diff);
+                setSettings({ ...settings, diff: difficulties[(idx + 1) % difficulties.length] });
+            };
+
+            const toggleStage = () => {
+                Audio.play('select');
+                const idx = stages.indexOf(settings.stage);
+                setSettings({ ...settings, stage: stages[(idx + 1) % stages.length] });
+            };
+
+            return (
+                <div className="relative z-20 flex flex-col items-center justify-center h-full animate-[fadeIn_0.5s]">
+                    <h1 className="text-7xl font-comic text-transparent bg-clip-text bg-gradient-to-b from-orange-400 to-red-600 drop-shadow-[0_5px_0_rgba(255,255,255,0.2)] mb-8 transform hover:scale-105 transition-transform">
+                        SHINOBI BATTLE
+                    </h1>
+
+                    <div className="flex gap-8 mb-12">
+                        {/* Difficulty Button */}
+                        <button onClick={toggleDiff} className="glass-panel px-6 py-4 clip-button hover:bg-white/10 group min-w-[200px]">
+                            <div className="text-xs text-gray-400 mb-1">DIFFICULTY</div>
+                            <div className="text-2xl font-bold text-orange-400 uppercase">{settings.diff}</div>
+                            <div className="h-1 w-full bg-gray-700 mt-2 rounded overflow-hidden">
+                                <div className={`h-full bg-orange-500 transition-all duration-300 w-${(difficulties.indexOf(settings.diff)+1)*3}/12`}></div>
+                            </div>
+                        </button>
+
+                        {/* Stage Button */}
+                        <button onClick={toggleStage} className="glass-panel px-6 py-4 clip-button hover:bg-white/10 group min-w-[200px]">
+                            <div className="text-xs text-gray-400 mb-1">LOCATION</div>
+                            <div className="text-2xl font-bold text-blue-400 uppercase">{ASSETS.stages[settings.stage].name}</div>
+                        </button>
+                    </div>
+
+                    <button 
+                        onClick={() => { Audio.init(); Audio.play('select'); onStart(); }}
+                        className="px-16 py-6 bg-gradient-to-r from-orange-600 to-red-600 clip-button font-comic text-3xl tracking-widest hover:scale-110 hover:shadow-[0_0_30px_rgba(255,69,0,0.6)] transition-all duration-300 border-b-4 border-red-900"
+                    >
+                        START FIGHT
+                    </button>
+                    
+                    <button 
+                        onClick={() => setSettings({...settings, audio: !settings.audio})}
+                        className="mt-8 text-gray-500 hover:text-white text-sm"
+                    >
+                        SOUND: {settings.audio ? 'ON' : 'OFF'}
+                    </button>
+                </div>
+            );
+        };
+
+        // --- BATTLE ENGINE (CORE) ---
+        const BattleArena = ({ settings, onFinish }) => {
+            // Stats & Constants
+            const MAX_HP = 400;
+            const MAX_CHAKRA = 100;
+            const CONFIG = {
+                easy: { delay: 2000, dmgMult: 0.8, ultProb: 0.1 },
+                normal: { delay: 1200, dmgMult: 1.0, ultProb: 0.3 },
+                hard: { delay: 800, dmgMult: 1.3, ultProb: 0.6 },
+                god: { delay: 400, dmgMult: 2.0, ultProb: 0.9 },
+            }[settings.diff];
+
+            // State
+            const [hp, setHp] = React.useState({ p: MAX_HP, e: MAX_HP }); // p = player, e = enemy
+            const [chakra, setChakra] = React.useState(0);
+            const [anim, setAnim] = React.useState({ p: 'idle', e: 'idle' });
+            const [turn, setTurn] = React.useState('player'); // player, enemy, locked
+            const [cd, setCd] = React.useState({ atk: 0, ult: 0 }); // Cooldowns
+            const [fx, setFx] = React.useState({ shake: false, hitStop: false, floater: null });
+
+            // Cooldown Timer
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    if (fx.hitStop) return; // Freeze CD on hitstop
+                    setCd(prev => ({ 
+                        atk: Math.max(0, prev.atk - 100), 
+                        ult: Math.max(0, prev.ult - 100) 
+                    }));
+                }, 100);
+                return () => clearInterval(timer);
+            }, [fx.hitStop]);
+
+            // Enemy AI
+            React.useEffect(() => {
+                if (turn === 'enemy' && hp.e > 0 && !fx.hitStop) {
+                    const timer = setTimeout(() => {
+                        const useUlt = Math.random() < CONFIG.ultProb;
+                        executeMove('enemy', useUlt ? 'atk2' : 'atk1');
+                    }, CONFIG.delay);
+                    return () => clearTimeout(timer);
+                }
+            }, [turn, hp.e, fx.hitStop]);
+
+            // Helper: Combat Logic
+            const executeMove = (who, type) => {
+                if (fx.hitStop) return;
+                
+                // Logic Player
+                if (who === 'player') {
+                    if (type === 'atk2' && chakra < MAX_CHAKRA) return; // Not enough chakra
+                    setTurn('locked');
+                    if (type === 'atk2') setChakra(0); // Reset chakra
+                    else setChakra(c => Math.min(MAX_CHAKRA, c + 20)); // Gain chakra
+                    
+                    setCd(prev => ({ ...prev, [type === 'atk2' ? 'ult' : 'atk']: type === 'atk2' ? 5000 : 1000 }));
+                }
+
+                const isUlt = type === 'atk2';
+                Audio.play(isUlt ? 'ult' : 'hit');
+                
+                // 1. Animasi Serang
+                setAnim(prev => ({ ...prev, [who === 'player' ? 'p' : 'e']: type }));
+
+                // 2. Hit Delay (Impact)
+                setTimeout(() => {
+                    const baseDmg = isUlt ? 50 : 25;
+                    const rng = Math.floor(Math.random() * 15);
+                    let dmg = baseDmg + rng;
+                    if (who === 'enemy') dmg = Math.floor(dmg * CONFIG.dmgMult);
+
+                    // Effects
+                    setFx(prev => ({ ...prev, shake: true, hitStop: true }));
+                    
+                    // Show Damage Text
+                    setFx(prev => ({ ...prev, floater: { val: dmg, side: who === 'player' ? 'right' : 'left', crit: isUlt } }));
+                    setTimeout(() => setFx(prev => ({ ...prev, floater: null })), 800);
+
+                    // Apply Damage
+                    setTimeout(() => {
+                        const target = who === 'player' ? 'e' : 'p';
+                        setHp(prev => {
+                            const newHp = Math.max(0, prev[target] - dmg);
+                            if (newHp <= 0) {
+                                // Game Over
+                                setTimeout(() => onFinish(who === 'player' ? 'NARUTO' : 'SASUKE'), 1000);
+                            }
+                            return { ...prev, [target]: newHp };
+                        });
+                        setAnim(prev => ({ ...prev, [target]: 'hit' }));
+                        setFx(prev => ({ ...prev, hitStop: false }));
+                        setTimeout(() => setFx(prev => ({ ...prev, shake: false })), 300);
+
+                    }, isUlt ? 100 : 50); // Hitstop duration
+
+                    // 3. Reset Turn
+                    setTimeout(() => {
+                        setAnim({ p: 'idle', e: 'idle' });
+                        if (hp.p > 0 && hp.e > 0) {
+                             if (who === 'player') setTurn('enemy');
+                             else setTurn('player');
+                        }
+                    }, 800);
+
+                }, 400); // Animation contact point
+            };
+
+            const isUltReady = chakra >= MAX_CHAKRA;
+
+            return (
+                <div className={`relative w-full h-full p-6 flex flex-col justify-between z-20 ${fx.shake ? 'shake' : ''} ${fx.hitStop ? 'hit-stop' : ''}`}>
+                    
+                    {/* --- HUD AREA --- */}
+                    <div className="flex justify-between items-start w-full max-w-7xl mx-auto">
+                        
+                        {/* Player HUD */}
+                        <div className="flex gap-4 w-[40%] items-start animate-[slideInLeft_0.5s]">
+                            <div className="w-20 h-20 border-2 border-orange-500 rounded bg-black overflow-hidden shadow-[0_0_15px_orange]">
+                                <img src={ASSETS.naruto.avatar} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1">
+                                <h2 className="text-3xl font-comic text-orange-500 tracking-wider stroke-black">NARUTO</h2>
+                                {/* HP Bar */}
+                                <div className="h-6 w-full bg-gray-900 border border-gray-600 bar-skew-l overflow-hidden relative">
+                                    <div className="h-full bg-gradient-to-r from-yellow-500 to-orange-600 transition-all duration-300" style={{width: `${(hp.p/MAX_HP)*100}%`}}></div>
+                                </div>
+                                <div className="text-xs text-orange-300 font-mono text-right mt-1">{hp.p}/{MAX_HP}</div>
+                                {/* Chakra Bar */}
+                                <div className="h-2 w-[80%] bg-gray-900 border border-gray-600 bar-skew-l overflow-hidden relative mt-1">
+                                    <div className={`h-full bg-cyan-400 transition-all duration-300 ${isUltReady ? 'animate-pulse bg-white' : ''}`} style={{width: `${(chakra/MAX_CHAKRA)*100}%`}}></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Center Info */}
+                        <div className="flex flex-col items-center pt-2">
+                             <div className={`px-4 py-1 rounded font-bold uppercase tracking-widest text-sm
+                                ${turn === 'player' ? 'bg-orange-600 text-white' : turn === 'enemy' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}
+                             `}>
+                                {turn === 'player' ? 'PLAYER TURN' : turn === 'enemy' ? 'ENEMY TURN' : 'WAIT'}
+                             </div>
+                             <div className="mt-2 text-xs text-gray-500 font-mono">{settings.diff} MODE</div>
+                        </div>
+
+                        {/* Enemy HUD */}
+                        <div className="flex flex-row-reverse gap-4 w-[40%] items-start animate-[slideInRight_0.5s]">
+                            <div className="w-20 h-20 border-2 border-purple-500 rounded bg-black overflow-hidden shadow-[0_0_15px_purple]">
+                                <img src={ASSETS.sasuke.avatar} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 text-right">
+                                <h2 className="text-3xl font-comic text-purple-400 tracking-wider">SASUKE</h2>
+                                {/* HP Bar */}
+                                <div className="h-6 w-full bg-gray-900 border border-gray-600 bar-skew-r overflow-hidden relative">
+                                    <div className="h-full bg-gradient-to-l from-purple-500 to-indigo-600 transition-all duration-300 float-right" style={{width: `${(hp.e/MAX_HP)*100}%`}}></div>
+                                </div>
+                                <div className="text-xs text-purple-300 font-mono text-left mt-1">{hp.e}/{MAX_HP}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* --- BATTLE FIELD --- */}
+                    <div className="flex-1 relative w-full max-w-6xl mx-auto flex justify-between items-end pb-12">
+                        
+                        {/* Damage Number Floater */}
+                        {fx.floater && (
+                            <div className={`absolute top-1/2 z-50 text-7xl font-comic text-white dmg-text
+                                ${fx.floater.side === 'left' ? 'left-[20%]' : 'right-[20%]'}
+                                ${fx.floater.crit ? 'text-red-500 scale-125' : 'text-white'}
+                            `} style={{textShadow: '4px 4px 0px black'}}>
+                                {fx.floater.val}{fx.floater.crit && '!'}
+                            </div>
+                        )}
+
+                        {/* Naruto Sprite */}
+                        <div className={`relative transition-all duration-75 
+                            ${anim.p === 'hit' ? 'brightness-200 sepia translate-x-[-10px]' : ''}
+                            ${anim.p.includes('atk') ? 'translate-x-32 scale-110 z-20' : ''}
+                        `}>
+                            <img 
+                                src={ASSETS.naruto[anim.p] || ASSETS.naruto.idle} 
+                                className="h-64 lg:h-80 object-contain drop-shadow-2xl" 
+                                style={{ transform: 'scaleX(-1)' }} // Flip
+                            />
+                            {/* Aura Ulti */}
+                            {turn === 'player' && isUltReady && (
+                                <div className="absolute inset-0 bg-blue-400 opacity-20 blur-xl rounded-full animate-pulse"></div>
+                            )}
+                        </div>
+
+                        {/* Sasuke Sprite */}
+                        <div className={`relative transition-all duration-75 
+                            ${anim.e === 'hit' ? 'brightness-200 sepia translate-x-[10px]' : ''}
+                            ${anim.e.includes('atk') ? '-translate-x-32 scale-125 z-20' : ''}
+                        `}>
+                            <img 
+                                src={ASSETS.sasuke[anim.e] || (anim.e === 'idle' && ASSETS.sasuke.idle.endsWith('png') ? ASSETS.sasuke.walk : ASSETS.sasuke.idle)}
+                                className="h-64 lg:h-80 object-contain drop-shadow-2xl"
+                            />
+                        </div>
+                    </div>
+
+                    {/* --- CONTROLS --- */}
+                    <div className="absolute bottom-6 right-12 flex gap-6 z-30">
+                        
+                        {/* Basic Attack Button */}
+                        <button 
+                            onMouseDown={() => executeMove('player', 'atk1')}
+                            disabled={turn !== 'player' || cd.atk > 0}
+                            className={`w-24 h-24 clip-button bg-gray-900 border-2 border-blue-500 relative overflow-hidden group active:scale-95 transition-transform
+                                ${turn !== 'player' || cd.atk > 0 ? 'grayscale opacity-50 cursor-not-allowed' : 'hover:shadow-[0_0_20px_blue]'}
+                            `}
+                        >
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <i className="fas fa-fist-raised text-3xl text-blue-400 group-hover:scale-125 transition-transform"></i>
+                                <span className="text-[10px] font-bold mt-1">ATTACK</span>
+                            </div>
+                            {/* CD Overlay */}
+                            <div className="absolute bottom-0 w-full bg-black/80 transition-[height]" style={{ height: `${(cd.atk/1000)*100}%` }}></div>
+                        </button>
+
+                        {/* Ultimate Button */}
+                        <button 
+                            onMouseDown={() => executeMove('player', 'atk2')}
+                            disabled={turn !== 'player' || cd.ult > 0 || !isUltReady}
+                            className={`w-32 h-32 clip-button bg-gray-900 border-2 border-red-500 relative overflow-hidden group active:scale-95 transition-transform
+                                ${turn !== 'player' || cd.ult > 0 || !isUltReady ? 'grayscale opacity-50 cursor-not-allowed' : 'hover:shadow-[0_0_30px_red] glow-pulse'}
+                            `}
+                        >
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-red-900/50 to-transparent">
+                                <i className="fas fa-meteor text-4xl text-yellow-400 group-hover:rotate-180 transition-transform duration-500"></i>
+                                <span className="font-comic text-xl mt-1 tracking-widest text-white">ULTI</span>
+                                {!isUltReady && <span className="text-[10px] text-red-300">NEED CHAKRA</span>}
+                            </div>
+                            {/* CD Overlay */}
+                            <div className="absolute bottom-0 w-full bg-black/80 transition-[height]" style={{ height: `${(cd.ult/5000)*100}%` }}></div>
+                        </button>
+                    </div>
+
+                </div>
+            );
+        };
+
+        const ResultScreen = ({ winner, onRestart }) => {
+            const isWin = winner === 'NARUTO';
+            
+            React.useEffect(() => {
+                Audio.play(isWin ? 'win' : 'hit');
+            }, []);
+
+            return (
+                <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center animate-[fadeIn_0.5s]">
+                    <h1 className="text-9xl font-comic text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 mb-8 animate-bounce drop-shadow-[0_10px_0_rgba(255,0,0,0.5)]">
+                        {isWin ? 'VICTORY' : 'DEFEAT'}
+                    </h1>
+                    
+                    <div className="flex items-center gap-8 mb-12">
+                        <img 
+                            src={isWin ? ASSETS.naruto.win : ASSETS.sasuke.idle} 
+                            className="h-64 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" 
+                        />
+                        <div className="text-left">
+                            <div className="text-4xl font-bold text-white mb-2">WINNER:</div>
+                            <div className={`text-6xl font-comic ${isWin ? 'text-orange-500' : 'text-purple-500'}`}>{winner}</div>
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={() => { Audio.play('select'); onRestart(); }}
+                        className="px-12 py-4 bg-white text-black font-black text-2xl clip-button hover:scale-110 hover:bg-orange-400 transition-all"
+                    >
+                        MAIN MENU
+                    </button>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    <script src="assets/sec.js"></script>
+</body>
+</html>
+
